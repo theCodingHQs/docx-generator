@@ -27,7 +27,7 @@ export default function DocxProcessor() {
       first_name: "john",
       last_name: "doe",
       address: "a d d r e s s",
-      avatar:
+      image:
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAIAAAAC64paAAAAcklEQVR4nGL52KfHgAQ2nZmIzLU8/BWZ27vuFDKXiYECMEQ1s5h3aiPzd6Z4IHMv//iJzNX/a0g1m4eoZha33mpkvow5Sgil30ZJf0fv36KazUNUM8vGf7OR+Tp/VJC5W+UUkLnpuhpUs3mIagYEAAD//4IxGiHuxeBEAAAAAElFTkSuQmCC",
     };
 
@@ -59,6 +59,7 @@ export default function DocxProcessor() {
     // Get document.xml content
     let documentXml = await zip.file("word/document.xml")?.async("string");
     let relsXml = await zip.file("word/_rels/document.xml.rels")?.async("string");
+    let content_types = await zip.file("[Content_Types].xml")?.async("string");
     console.log("Original XML:", documentXml?.substring(0, 500) + "...");
     setProgress(30);
 
@@ -79,9 +80,12 @@ export default function DocxProcessor() {
             relsXml,
             placeholder,
             value,
-            112
+            120
           );
-
+          const imageType = value.split("/")[1].split(";")[0];
+          if (!content_types?.includes(`image/${imageType}`)) {
+            content_types = content_types?.replace("</Types>", `<Default ContentType="image/${imageType}" Extension="${imageType}"/></Types>`);
+          }
           modifiedXml = result.modifiedXml;
           relsXml = result.newRelsXml;
           mediaFiles.push(result.media);
@@ -97,6 +101,7 @@ export default function DocxProcessor() {
     });
 
     // Update XML in zip
+    zip.file("[Content_Types].xml", content_types);
     zip.file("word/document.xml", modifiedXml);
     zip.file("word/_rels/document.xml.rels", relsXml);
     
@@ -184,43 +189,50 @@ const insertImageIntoDocx = (documentXml: string | undefined, relsXml: string | 
   
   // Create the drawing XML for the image
   const drawingXml = `
-    <w:r>
-      <w:drawing>
-        <wp:inline distT="0" distB="0" distL="0" distR="0">
-          <wp:extent cx="${width * 9525}" cy="${width * 9525}"/>
-          <wp:effectExtent l="0" t="0" r="0" b="0"/>
-          <wp:docPr id="1" name="Picture"/>
-          <wp:cNvGraphicFramePr>
-            <a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/>
-          </wp:cNvGraphicFramePr>
-          <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
-            <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
-              <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
-                <pic:nvPicPr>
-                  <pic:cNvPr id="1" name="Picture"/>
-                  <pic:cNvPicPr/>
-                </pic:nvPicPr>
-                <pic:blipFill>
-                  <a:blip r:embed="${imageId}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>
-                  <a:stretch>
-                    <a:fillRect/>
-                  </a:stretch>
-                </pic:blipFill>
-                <pic:spPr>
-                  <a:xfrm>
-                    <a:off x="0" y="0"/>
-                    <a:ext cx="${width * 9525}" cy="${width * 9525}"/>
-                  </a:xfrm>
-                  <a:prstGeom prst="rect">
-                    <a:avLst/>
-                  </a:prstGeom>
-                </pic:spPr>
-              </pic:pic>
-            </a:graphicData>
-          </a:graphic>
-        </wp:inline>
-      </w:drawing>
-    </w:r>
+    <w:drawing>
+            <wp:inline distB="114300"
+                       distT="114300"
+                       distL="114300"
+                       distR="114300">
+                <wp:extent cx="${width * 9525}" cy="${width * 9525}" />
+                <wp:effectExtent b="0"
+                                 l="0"
+                                 r="0"
+                                 t="0" />
+                <wp:docPr id="1"
+                          name="${imageFilename}" />
+                <a:graphic>
+                    <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                        <pic:pic>
+                            <pic:nvPicPr>
+                                <pic:cNvPr id="0"
+                                           name="${imageFilename}" />
+                                <pic:cNvPicPr preferRelativeResize="0" />
+                            </pic:nvPicPr>
+                            <pic:blipFill>
+                                <a:blip r:embed="${imageId}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" />
+                                <a:srcRect b="0"
+                                           l="0"
+                                           r="0"
+                                           t="0" />
+                                <a:stretch>
+                                    <a:fillRect />
+                                </a:stretch>
+                            </pic:blipFill>
+                            <pic:spPr>
+                                <a:xfrm>
+                                    <a:off x="0"
+                                           y="0" />
+                                    <a:ext cx="${width * 9525}" cy="${width * 9525}" />
+                                </a:xfrm>
+                                <a:prstGeom prst="rect" />
+                                <a:ln />
+                            </pic:spPr>
+                        </pic:pic>
+                    </a:graphicData>
+                </a:graphic>
+            </wp:inline>
+        </w:drawing>
   `;
 
   // Find and replace the placeholder in the document XML
